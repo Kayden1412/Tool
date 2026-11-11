@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TMW Freq Checker — Anki Deck Coverage</title>
+    <meta
+      name="description"
+      content="Drop an exported Anki deck and see how many of its words appear in the TMW v2 Japanese frequency dictionary. Everything runs locally in your browser."
+    />
+    <meta name="theme-color" content="#ffd93d" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('twm-theme');
+          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = mode === 'dark' || (mode === 'auto' && systemDark);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-theme-mode', mode);
+        } catch (error) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23ffd93d'/%3E%3Crect x='8' y='8' width='84' height='84' fill='none' stroke='%23111' stroke-width='8'/%3E%3Ctext x='50' y='70' font-family='Arial Black,sans-serif' font-size='46' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span>FREQUENCY CHECKER ✳ TMW V2 ✳ LOCAL ONLY ✳ NO UPLOADS ✳ 231K TERMS ✳ VANILLA JS ✳</span>
+        <span>FREQUENCY CHECKER ✳ TMW V2 ✳ LOCAL ONLY ✳ NO UPLOADS ✳ 231K TERMS ✳ VANILLA JS ✳</span>
+      </div>
+    </div>
+
+    <main class="shell" id="main">
+      <header class="hero panel">
+        <span class="hero__star" aria-hidden="true">✳</span>
+        <div class="hero__badges">
+          <span class="badge badge--yellow">TMW V2</span>
+          <span class="badge badge--pink">ANKI COVERAGE</span>
+          <span class="badge badge--lime">LOCAL ONLY</span>
+          <button
+            class="theme-toggle"
+            id="themeToggle"
+            type="button"
+            title="Theme: auto (follows system)"
+            aria-label="Theme: auto (follows system). Activate to switch to light."
+          >
+            <span class="theme-toggle__icon" id="themeIcon" aria-hidden="true">◐</span>
+            <span id="themeLabel" aria-live="polite">AUTO</span>
+          </button>
+        </div>
+
+        <h1 class="hero__title">
+          DECK <span class="hero__highlight">COVERAGE</span><br />
+          CHECKER<span class="hero__dot">.</span>
+        </h1>
+
+        <div class="hero__body">
+          <p class="hero__lede">
+            Drop an exported Anki deck. We’ll check every card against the
+            <strong>TMW v2</strong> frequency list and show how much of it you’ve
+            covered — right in your browser.
+          </p>
+          <ul class="hero__facts" aria-label="At a glance">
+            <li><b>231K</b><span>terms indexed</span></li>
+            <li><b>0</b><span>files uploaded</span></li>
+            <li><b>1</b><span>text file needed</span></li>
+          </ul>
+        </div>
+      </header>
+
+      <section class="panel dict-panel" aria-labelledby="dict-heading">
+        <div class="panel__bar">
+          <h2 id="dict-heading">Reference dictionary</h2>
+          <span class="panel__index">00</span>
+        </div>
+
+        <div class="dict-card" id="dictCard" data-state="loading">
+          <div class="dict-card__glyph" aria-hidden="true">
+            <span>FREQ</span>
+            <span>BANK</span>
+          </div>
+          <div class="dict-card__body">
+            <p class="dict-card__title" id="dictTitle">TMW v2 frequency list</p>
+            <p class="dict-card__meta" id="dictMeta">Loading TMW v2 frequency index…</p>
+            <div
+              class="progress progress--thin"
+              id="dictProgressWrap"
+              role="progressbar"
+              aria-label="Dictionary loading progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div class="progress__fill" id="dictProgress"></div>
+            </div>
+            <div class="dict-card__error" id="dictError" hidden>
+              <p id="dictErrorText"></p>
+              <label class="btn btn--small btn--white" for="zipInput">
+                LOAD ZIP MANUALLY
+              </label>
+            </div>
+          </div>
+          <span class="badge badge--status" id="dictBadge">LOADING</span>
+        </div>
+        <input type="file" id="zipInput" accept=".zip,application/zip" hidden />
+      </section>
+
+      <section class="panel upload-panel" aria-labelledby="upload-heading">
+        <div class="panel__bar">
+          <h2 id="upload-heading">Load your export</h2>
+          <span class="panel__index">01</span>
+        </div>
+
+        <div class="upload-body">
+          <div
+            class="dropzone"
+            id="dropzone"
+            role="button"
+            tabindex="0"
+            aria-label="Choose or drop an Anki text export"
+          >
+            <span class="dropzone__sticker">ANKI .TXT</span>
+            <span class="dropzone__arrow" aria-hidden="true">↓</span>
+            <p class="dropzone__title">DROP YOUR DECK HERE</p>
+            <p class="dropzone__hint">
+              Tab-separated .txt, .tsv or .csv — e.g. <code>mining.txt</code>
+            </p>
+            <span class="btn btn--yellow">CHOOSE FILE</span>
+            <p class="dropzone__micro">or drag &amp; drop · nothing leaves this device</p>
+            <input
+              type="file"
+              id="fileInput"
+              accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv"
+              hidden
+            />
+          </div>
+
+          <div class="file-card" id="fileCard" hidden>
+            <div class="file-card__main">
+              <span class="file-card__tag">LOADED</span>
+              <p class="file-card__name" id="fileName">mining.txt</p>
+              <p class="file-card__meta" id="fileMeta"></p>
+            </div>
+            <button class="btn btn--small btn--white" id="changeFileBtn" type="button">
+              CHANGE FILE
+            </button>
+          </div>
+
+          <div class="settings" id="settings" hidden>
+            <div class="settings__group">
+              <label class="field" for="termColSelect">
+                <span class="field__label">Term column</span>
+                <select id="termColSelect"></select>
+              </label>
+              <label class="field" for="readingColSelect">
+                <span class="field__label">Reading column <em>(optional)</em></span>
+                <select id="readingColSelect"></select>
+              </label>
+              <label class="field" for="delimiterSelect">
+                <span class="field__label">Delimiter</span>
+                <select id="delimiterSelect">
+                  <option value="auto" selected>Auto-detect</option>
+                  <option value="tab">Tab</option>
+                  <option value="comma">Comma</option>
+                  <option value="semicolon">Semicolon</option>
+                  <option value="pipe">Pipe</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="settings__footer">
+              <label class="switch" for="matchReading">
+                <input type="checkbox" id="matchReading" />
+                <span class="switch__box" aria-hidden="true"></span>
+                <span>
+                  Also match by reading
+                  <small>(kana → kanji fallback)</small>
+                </span>
+              </label>
+              <button class="btn btn--black" id="recheckBtn" type="button" disabled>
+                RECHECK <span aria-hidden="true">↻</span>
+              </button>
+            </div>
+            <p class="settings__note" id="parseNote"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="results" id="resultsSection" aria-labelledby="results-heading" hidden>
+        <div class="section-heading">
+          <h2 id="results-heading">THE NUMBERS</h2>
+          <p id="resultsSubtitle"></p>
+        </div>
+
+        <div class="scoreboard panel">
+          <div class="score-hero">
+            <p class="score-hero__label">UNIQUE EXPRESSION COVERAGE</p>
+            <p class="score-hero__value" id="heroPct">0%</p>
+            <p class="score-hero__detail" id="heroDetail"></p>
+            <div
+              class="progress progress--hero"
+              id="heroProgressWrap"
+              role="progressbar"
+              aria-label="Unique expression coverage"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div class="progress__fill" id="heroProgress"></div>
+            </div>
+          </div>
+          <div class="score-side">
+            <div class="mini-stat mini-stat--yellow">
+              <span id="statCards">0</span><small>cards in file</small>
+            </div>
+            <div class="mini-stat mini-stat--cyan">
+              <span id="statUnique">0</span><small>unique expressions</small>
+            </div>
+            <div class="mini-stat mini-stat--lime">
+              <span id="statCovered">0</span><small>found in TMW</small>
+            </div>
+            <div class="mini-stat mini-stat--pink">
+              <span id="statMissing">0</span><small>not found</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics">
+          <section class="panel cutoff-panel" aria-labelledby="cutoff-heading">
+            <div class="panel__bar">
+              <h3 id="cutoff-heading">Frequency cutoffs</h3>
+              <span class="panel__index">02</span>
+            </div>
+            <p class="panel__note">Cumulative unique expressions at or inside each TMW rank.</p>
+            <div class="cutoff-grid" id="cutoffGrid"></div>
+          </section>
+
+          <section class="panel tier-panel" aria-labelledby="tier-heading">
+            <div class="panel__bar">
+              <h3 id="tier-heading">Tier breakdown</h3>
+              <span class="panel__index">03</span>
+            </div>
+            <p class="panel__note">Your covered words by TMW frequency tier — multi-rank words count in each. Immortal and Mythic share rank 99,999, so TMW’s own labels split them.</p>
+            <div class="tier-list" id="tierList"></div>
+          </section>
+        </div>
+
+        <section class="panel table-panel" aria-labelledby="table-heading">
+          <div class="panel__bar">
+            <h3 id="table-heading">Card by card</h3>
+            <span class="panel__index">04</span>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="tabs" role="tablist" aria-label="Filter cards">
+              <button class="tab is-active" data-tab="all" role="tab" aria-selected="true">
+                ALL <span id="tabAllCount">0</span>
+              </button>
+              <button class="tab" data-tab="covered" role="tab" aria-selected="false">
+                COVERED <span id="tabCoveredCount">0</span>
+              </button>
+              <button class="tab" data-tab="missing" role="tab" aria-selected="false">
+                MISSING <span id="tabMissingCount">0</span>
+              </button>
+            </div>
+
+            <div class="table-tools">
+              <label class="search" for="searchInput">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  id="searchInput"
+                  type="search"
+                  placeholder="Search term or reading…"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="sr-only" for="tierFilter">Filter by tier</label>
+              <select id="tierFilter" class="select select--compact">
+                <option value="all">All tiers</option>
+              </select>
+              <label class="sr-only" for="sortSelect">Sort cards</label>
+              <select id="sortSelect" class="select select--compact">
+                <option value="file">File order</option>
+                <option value="rank-asc">Rank ↑</option>
+                <option value="rank-desc">Rank ↓</option>
+                <option value="term">A → Z</option>
+              </select>
+              <button class="btn btn--small btn--cyan" id="exportBtn" type="button">
+                EXPORT CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="card-table">
+              <thead>
+                <tr>
+                  <th class="col-num">#</th>
+                  <th>Expression</th>
+                  <th>Reading</th>
+                  <th>Status</th>
+                  <th class="col-rank">Rank</th>
+                  <th>Tier</th>
+                  <th class="col-match">Match</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+
+          <p class="empty-results" id="emptyResults" hidden>No cards match this filter.</p>
+
+          <div class="pagination" id="pagination">
+            <button class="btn btn--small btn--white" id="prevBtn" type="button">
+              ← PREV
+            </button>
+            <span id="pageInfo">PAGE 1 / 1</span>
+            <button class="btn btn--small btn--white" id="nextBtn" type="button">
+              NEXT →
+            </button>
+            <span class="pagination__rows" id="rowInfo"></span>
+          </div>
+        </section>
+
+        <div class="export-note">
+          <p>
+            <strong>How matching works:</strong> the expression column is compared to TMW
+            headwords. Enable reading matching to fall back to kana when the exact expression is
+            absent — it is off by default to avoid homophone false positives.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel how-panel" aria-labelledby="how-heading">
+        <div class="panel__bar">
+          <h2 id="how-heading">How it works</h2>
+          <span class="panel__index">05</span>
+        </div>
+        <div class="how-grid">
+          <article class="how-step">
+            <span class="how-step__num">1</span>
+            <h3>Export from Anki</h3>
+            <p>
+              Select your deck → <strong>Export</strong> → <strong>Notes in Plain Text</strong>.
+              Keep the field separator as tab. Column headers are fine — they’re skipped
+              automatically.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">2</span>
+            <h3>Drop the file</h3>
+            <p>
+              The export is parsed locally. If column autodetection misses, pick the expression
+              and reading columns yourself. Nothing is sent to a server.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">3</span>
+            <h3>Read the coverage</h3>
+            <p>
+              See the share of unique expressions already in TMW, how deep into each frequency
+              tier you’ve mined, and a searchable card-by-card report.
+            </p>
+          </article>
+        </div>
+        <div class="how-note">
+          <p>
+            <strong>Why do some words show as missing?</strong> TMW is a frequency list, not a
+            complete dictionary. Kana-only cards, inflected verbs and names may not have an exact
+            headword match — that’s what the reading fallback and the CSV export are for.
+          </p>
+          <p>
+            <strong>Privacy:</strong> the dictionary files and your export are read with browser
+            APIs only. No network requests carry your deck.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p class="footer__title">TMW FREQ CHECKER</p>
+      <p class="footer__meta">
+        Frequency data: <strong>TMW v2</strong> by Vignes, Claude · Attribution: TMW.
+        Checker: vanilla HTML, CSS &amp; JS — no dependencies, no build step.
+      </p>
+      <p class="footer__meta footer__meta--small">
+        Requires a browser with <code>DecompressionStream</code> (Chrome/Edge 80+, Firefox 113+,
+        Safari 16.4+).
+      </p>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anki Duplicate Checker — Notes &amp; Deck Dupes</title>
+    <meta
+      name="description"
+      content="Drop one or more exported Anki note files and find duplicate expressions, readings or exact note rows. Everything runs locally in your browser."
+    />
+    <meta name="theme-color" content="#ffd93d" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('twm-theme');
+          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = mode === 'dark' || (mode === 'auto' && systemDark);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-theme-mode', mode);
+        } catch (error) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23ff90e8'/%3E%3Crect x='8' y='8' width='84' height='84' fill='none' stroke='%23111' stroke-width='8'/%3E%3Ctext x='50' y='70' font-family='Arial Black,sans-serif' font-size='46' text-anchor='middle'%3ED%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span>DUPLICATE CHECKER ✳ ANKI NOTES ✳ MULTIPLE FILES ✳ LOCAL ONLY ✳ NO UPLOADS ✳</span>
+        <span>DUPLICATE CHECKER ✳ ANKI NOTES ✳ MULTIPLE FILES ✳ LOCAL ONLY ✳ NO UPLOADS ✳</span>
+      </div>
+    </div>
+
+    <main class="shell" id="main">
+      <header class="hero panel">
+        <span class="hero__star" aria-hidden="true">✳</span>
+        <div class="hero__badges">
+          <span class="badge badge--yellow">ANKI NOTES</span>
+          <span class="badge badge--pink">DUPES</span>
+          <span class="badge badge--lime">MULTI-FILE</span>
+          <button
+            class="theme-toggle"
+            id="themeToggle"
+            type="button"
+            title="Theme: auto (follows system)"
+            aria-label="Theme: auto (follows system). Activate for light theme."
+          >
+            <span class="theme-toggle__icon" id="themeIcon" aria-hidden="true">◐</span>
+            <span id="themeLabel" aria-live="polite">AUTO</span>
+          </button>
+        </div>
+
+        <h1 class="hero__title">
+          DUPLI<span class="hero__highlight">CATE</span><br />
+          SCANNER<span class="hero__dot">.</span>
+        </h1>
+
+        <div class="hero__body">
+          <p class="hero__lede">
+            Drop one or more exported Anki note files. We’ll find repeated
+            <strong>expressions</strong>, readings and exact note rows across all of them —
+            right in your browser.
+          </p>
+          <ul class="hero__facts" aria-label="At a glance">
+            <li><b id="heroFiles">0</b><span>files loaded</span></li>
+            <li><b id="heroNotes">0</b><span>notes scanned</span></li>
+            <li><b id="heroGroups">0</b><span>duplicate groups</span></li>
+          </ul>
+        </div>
+      </header>
+
+      <section class="panel upload-panel" aria-labelledby="upload-heading">
+        <div class="panel__bar">
+          <h2 id="upload-heading">Note exports</h2>
+          <span class="panel__index">01</span>
+        </div>
+
+        <div class="upload-body">
+          <div
+            class="dropzone"
+            id="dropzone"
+            role="button"
+            tabindex="0"
+            aria-label="Choose or drop one or more Anki text exports"
+          >
+            <span class="dropzone__sticker">MULTIPLE FILES</span>
+            <span class="dropzone__arrow" aria-hidden="true">↓</span>
+            <p class="dropzone__title">DROP NOTE EXPORTS HERE</p>
+            <p class="dropzone__hint">
+              Tab-separated .txt, .tsv or .csv from Anki — add as many as you like
+            </p>
+            <span class="btn btn--yellow">CHOOSE FILES</span>
+            <p class="dropzone__micro">or drag &amp; drop · nothing leaves this device</p>
+            <input
+              type="file"
+              id="fileInput"
+              accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv"
+              multiple
+              hidden
+            />
+          </div>
+
+          <div class="file-list" id="fileList" hidden></div>
+          <p class="settings__note" id="fileEmpty">
+            No files loaded yet. Add at least two exports, or load one file twice, to compare.
+          </p>
+
+          <div class="settings" id="settings" hidden>
+            <div class="settings__group settings__group--single">
+              <label class="field" for="matchMode">
+                <span class="field__label">Match notes by</span>
+                <select id="matchMode">
+                  <option value="term-reading" selected>Expression + reading</option>
+                  <option value="term">Expression only</option>
+                  <option value="note">Exact note row</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="settings__footer">
+              <p class="settings__note" id="parseNote">
+                Columns are detected per file. Duplicate keys are NFKC-normalized,
+                case-insensitive and ignore a trailing <code>[reading]</code> annotation.
+              </p>
+              <button class="btn btn--black" id="clearBtn" type="button" disabled>
+                CLEAR ALL FILES
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results" id="resultsSection" aria-labelledby="results-heading" hidden>
+        <div class="section-heading">
+          <h2 id="results-heading">THE DUPLICATES</h2>
+          <p id="resultsSubtitle"></p>
+        </div>
+
+        <div class="scoreboard panel">
+          <div class="score-hero">
+            <p class="score-hero__label">REDUNDANT NOTES</p>
+            <p class="score-hero__value" id="heroRedundant">0</p>
+            <p class="score-hero__detail" id="heroDetail"></p>
+            <div
+              class="progress progress--hero"
+              id="heroProgressWrap"
+              role="progressbar"
+              aria-label="Share of notes involved in duplicates"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div class="progress__fill" id="heroProgress"></div>
+            </div>
+          </div>
+          <div class="score-side">
+            <div class="mini-stat mini-stat--yellow">
+              <span id="statFiles">0</span><small>files loaded</small>
+            </div>
+            <div class="mini-stat mini-stat--cyan">
+              <span id="statNotes">0</span><small>notes scanned</small>
+            </div>
+            <div class="mini-stat mini-stat--lime">
+              <span id="statUnique">0</span><small>unique keys</small>
+            </div>
+            <div class="mini-stat mini-stat--pink">
+              <span id="statAcross">0</span><small>cross-file groups</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics">
+          <section class="panel tier-panel" aria-labelledby="top-heading">
+            <div class="panel__bar">
+              <h3 id="top-heading">Top repeats</h3>
+              <span class="panel__index">02</span>
+            </div>
+            <p class="panel__note">The groups with the most copies, across every loaded file.</p>
+            <div class="tier-list dup-bars" id="topList"></div>
+          </section>
+
+          <section class="panel cutoff-panel" aria-labelledby="multiplicity-heading">
+            <div class="panel__bar">
+              <h3 id="multiplicity-heading">Copy counts</h3>
+              <span class="panel__index">03</span>
+            </div>
+            <p class="panel__note">How many duplicate groups have exactly 2, 3, 4 or 5+ notes.</p>
+            <div class="cutoff-grid" id="multiplicityGrid"></div>
+          </section>
+        </div>
+
+        <section class="panel table-panel" aria-labelledby="table-heading">
+          <div class="panel__bar">
+            <h3 id="table-heading">Duplicate groups</h3>
+            <span class="panel__index">04</span>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="tabs" role="tablist" aria-label="Filter duplicate groups">
+              <button class="tab is-active" data-tab="all" role="tab" aria-selected="true">
+                ALL <span id="tabAllCount">0</span>
+              </button>
+              <button class="tab" data-tab="across" role="tab" aria-selected="false">
+                ACROSS FILES <span id="tabAcrossCount">0</span>
+              </button>
+              <button class="tab" data-tab="within" role="tab" aria-selected="false">
+                SINGLE FILE <span id="tabWithinCount">0</span>
+              </button>
+            </div>
+
+            <div class="table-tools">
+              <label class="search" for="searchInput">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  id="searchInput"
+                  type="search"
+                  placeholder="Search term, reading or file…"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="sr-only" for="sortSelect">Sort duplicate groups</label>
+              <select id="sortSelect" class="select select--compact">
+                <option value="count-desc" selected>Most copies</option>
+                <option value="files-desc">Most files</option>
+                <option value="term">A → Z</option>
+                <option value="file-order">File order</option>
+              </select>
+              <button class="btn btn--small btn--cyan" id="exportBtn" type="button">
+                EXPORT CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="dup-groups" id="groupList"></div>
+
+          <p class="empty-results" id="emptyResults" hidden>No duplicate groups match this filter.</p>
+
+          <div class="pagination" id="pagination">
+            <button class="btn btn--small btn--white" id="prevBtn" type="button">
+              ← PREV
+            </button>
+            <span id="pageInfo">PAGE 1 / 1</span>
+            <button class="btn btn--small btn--white" id="nextBtn" type="button">
+              NEXT →
+            </button>
+            <span class="pagination__rows" id="rowInfo"></span>
+          </div>
+        </section>
+
+        <div class="export-note">
+          <p>
+            <strong>What counts as a duplicate?</strong>
+            Two or more notes that share the selected key. “Expression + reading” keeps
+            different readings apart; “Expression only” groups them; “Exact note row”
+            only matches rows where every field is identical.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel how-panel" aria-labelledby="how-heading">
+        <div class="panel__bar">
+          <h2 id="how-heading">How it works</h2>
+          <span class="panel__index">05</span>
+        </div>
+        <div class="how-grid">
+          <article class="how-step">
+            <span class="how-step__num">1</span>
+            <h3>Export your notes</h3>
+            <p>
+              In Anki: <strong>Browse</strong> → select notes → <strong>Export</strong> →
+              <strong>Notes in Plain Text</strong>. Keep the separator as tab. You can export
+              different decks or batches as separate files.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">2</span>
+            <h3>Add one or many files</h3>
+            <p>
+              Drop several exports at once, or add them one by one. Each file is parsed
+              locally and its expression/reading columns are auto-detected. Remove a file
+              any time to rescan.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">3</span>
+            <h3>Review and export</h3>
+            <p>
+              See which keys repeat, where every copy lives, and how many notes are
+              redundant. Filter across-file duplicates and download the report as CSV.
+            </p>
+          </article>
+        </div>
+        <div class="how-note">
+          <p>
+            <strong>Blank readings:</strong> “Expression + reading” keeps a note with no
+            reading separate from one with a reading. If your exports disagree about readings,
+            switch to “Expression only”.
+          </p>
+          <p>
+            <strong>Privacy:</strong> files are read with browser APIs only. No network
+            requests carry your notes, and nothing is installed or uploaded.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p class="footer__title">ANKI DUPLICATE SCANNER</p>
+      <p class="footer__meta">
+        Checks exported Anki notes for repeated expressions and rows · Vanilla HTML, CSS
+        &amp; JS — no dependencies, no build step.
+      </p>
+      <p class="footer__meta footer__meta--small">
+        Everything stays on this device. Multi-file exports supported.
+      </p>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

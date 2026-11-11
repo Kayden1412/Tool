@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TMW Tools — Frequency &amp; Duplicate Checkers</title>
+    <meta
+      name="description"
+      content="Two local, browser-only Anki tools: check TMW v2 frequency coverage and find duplicate notes across exported decks."
+    />
+    <meta name="theme-color" content="#ffd93d" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('twm-theme');
+          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = mode === 'dark' || (mode === 'auto' && systemDark);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-theme-mode', mode);
+        } catch (error) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23b8ff9f'/%3E%3Crect x='8' y='8' width='84' height='84' fill='none' stroke='%23111' stroke-width='8'/%3E%3Ctext x='50' y='70' font-family='Arial Black,sans-serif' font-size='46' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./site/styles.css" />
+    <style>
+      .tools {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 26px;
+        margin-top: 26px;
+      }
+
+      .tool {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        color: inherit;
+        text-decoration: none;
+        transition:
+          transform 120ms ease,
+          box-shadow 120ms ease;
+      }
+
+      .tool:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 9px 9px 0 var(--line);
+      }
+
+      .tool:focus-visible {
+        outline: 3px solid var(--pink);
+        outline-offset: 3px;
+      }
+
+      .tools > .tool {
+        margin-top: 0;
+      }
+
+      .tool__body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px;
+      }
+
+      .tool__glyph {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 88px;
+        height: 88px;
+        border: var(--border);
+        box-shadow: var(--shadow-sm);
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: 1.45rem;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        text-align: center;
+        transform: rotate(-2deg);
+      }
+
+      .tool--freq .tool__glyph {
+        background: var(--yellow);
+      }
+
+      .tool--dupes .tool__glyph {
+        background: var(--pink);
+      }
+
+      .tool__kicker {
+        margin: 0;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .tool__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: clamp(1.35rem, 2.6vw, 2rem);
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .tool__desc {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.55;
+      }
+
+      .tool__tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: auto;
+        padding-top: 4px;
+      }
+
+      .tool__cta {
+        align-self: flex-start;
+      }
+
+      @media (max-width: 860px) {
+        .tools {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span>TMW TOOLS ✳ TWO LOCAL CHECKERS ✳ FREQUENCY ✳ DUPLICATES ✳ NO UPLOADS ✳</span>
+        <span>TMW TOOLS ✳ TWO LOCAL CHECKERS ✳ FREQUENCY ✳ DUPLICATES ✳ NO UPLOADS ✳</span>
+      </div>
+    </div>
+
+    <main class="shell" id="main">
+      <header class="hero panel">
+        <span class="hero__star" aria-hidden="true">✳</span>
+        <div class="hero__badges">
+          <span class="badge badge--yellow">TMW TOOLS</span>
+          <span class="badge badge--pink">2 CHECKERS</span>
+          <span class="badge badge--lime">LOCAL ONLY</span>
+          <button
+            class="theme-toggle"
+            id="themeToggle"
+            type="button"
+            title="Theme: auto (follows system)"
+            aria-label="Theme: auto (follows system). Activate for light theme."
+          >
+            <span class="theme-toggle__icon" id="themeIcon" aria-hidden="true">◐</span>
+            <span id="themeLabel" aria-live="polite">AUTO</span>
+          </button>
+        </div>
+
+        <h1 class="hero__title">
+          PICK A<br />
+          CHECKER<span class="hero__dot">.</span>
+        </h1>
+
+        <div class="hero__body">
+          <p class="hero__lede">
+            Two browser-only tools for your Anki workflow. Check how much of the
+            <strong>TMW v2</strong> frequency list your deck covers, or find duplicate notes
+            across exported files.
+          </p>
+          <ul class="hero__facts" aria-label="At a glance">
+            <li><b>2</b><span>local tools</span></li>
+            <li><b>0</b><span>files uploaded</span></li>
+            <li><b>∞</b><span>notes supported</span></li>
+          </ul>
+        </div>
+      </header>
+
+      <div class="tools">
+        <a class="tool tool--freq panel" href="./site/">
+          <div class="panel__bar">
+            <h2>Frequency coverage</h2>
+            <span class="panel__index">01</span>
+          </div>
+          <div class="tool__body">
+            <span class="tool__glyph" aria-hidden="true">231K</span>
+            <p class="tool__kicker">TMW v2 · Anki export</p>
+            <h2 class="tool__title">Freq Checker</h2>
+            <p class="tool__desc">
+              Drop an exported deck and see what share of its unique expressions appear in the
+              TMW v2 frequency dictionary. Includes tier breakdowns, rank cutoffs, a searchable
+              card report and CSV export.
+            </p>
+            <div class="tool__tags">
+              <span class="badge badge--yellow">COVERAGE</span>
+              <span class="badge badge--cyan">TIERS</span>
+              <span class="badge badge--lime">CSV</span>
+            </div>
+            <span class="btn btn--black tool__cta">OPEN CHECKER <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+
+        <a class="tool tool--dupes panel" href="./dupes/">
+          <div class="panel__bar">
+            <h2>Duplicate notes</h2>
+            <span class="panel__index">02</span>
+          </div>
+          <div class="tool__body">
+            <span class="tool__glyph" aria-hidden="true">2×?</span>
+            <p class="tool__kicker">Multi-file · Anki notes</p>
+            <h2 class="tool__title">Duplicate Scanner</h2>
+            <p class="tool__desc">
+              Load one or many note exports and find repeated expressions, readings or exact
+              note rows. Groups copies by file, separates cross-file from single-file dupes, and
+              exports the full report.
+            </p>
+            <div class="tool__tags">
+              <span class="badge badge--pink">MULTI-FILE</span>
+              <span class="badge badge--cyan">DUPES</span>
+              <span class="badge badge--lime">CSV</span>
+            </div>
+            <span class="btn btn--black tool__cta">OPEN SCANNER <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+      </div>
+
+      <div class="export-note">
+        <p>
+          <strong>Everything runs locally.</strong> Both tools are static pages — no accounts,
+          no uploads, no build step. Serve this folder with
+          <code>python3 -m http.server 8000</code> and open
+          <code>http://localhost:8000</code>.
+        </p>
+      </div>
+
+      <section class="panel how-panel" aria-labelledby="how-heading">
+        <div class="panel__bar">
+          <h2 id="how-heading">How it works</h2>
+          <span class="panel__index">03</span>
+        </div>
+        <div class="how-grid">
+          <article class="how-step">
+            <span class="how-step__num">1</span>
+            <h3>Export from Anki</h3>
+            <p>
+              Use <strong>Notes in Plain Text</strong> with a tab separator. Column headers are
+              detected and skipped automatically.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">2</span>
+            <h3>Pick a tool</h3>
+            <p>
+              Coverage answers “how much of TMW have I mined?”. Duplicates answers “which notes
+              did I add twice?”. Both run entirely in your browser.
+            </p>
+          </article>
+          <article class="how-step">
+            <span class="how-step__num">3</span>
+            <h3>Keep the results</h3>
+            <p>
+              Filter and search the report, then download a CSV for spreadsheets or cleanup
+              scripts. Your files never leave the device.
+            </p>
+          </article>
+        </div>
+        <div class="how-note">
+          <p>
+            <strong>Same style, same privacy.</strong> The two tools share one neo-brutalist
+            design system, including the Auto / Light / Dark theme toggle.
+          </p>
+          <p>
+            <strong>Serve from this folder:</strong> the links expect <code>./site/</code> and
+            <code>./dupes/</code> to sit next to this page.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p class="footer__title">TMW TOOLS</p>
+      <p class="footer__meta">
+        Frequency data: <strong>TMW v2</strong> by Vignes, Claude · Attribution: TMW.
+        Both checkers are vanilla HTML, CSS &amp; JS — no dependencies, no build step.
+      </p>
+      <p class="footer__meta footer__meta--small">
+        Two local checkers · frequency coverage &amp; duplicate notes · nothing uploaded.
+      </p>
+    </footer>
+
+    <script>
+      (function () {
+        var THEME_KEY = 'twm-theme';
+        var MODES = ['auto', 'light', 'dark'];
+        var META = {
+          auto: { label: 'AUTO', icon: '◐', title: 'Theme: auto (follows system)', next: 'light' },
+          light: { label: 'LIGHT', icon: '☀', title: 'Theme: light', next: 'dark' },
+          dark: { label: 'DARK', icon: '☾', title: 'Theme: dark', next: 'auto' },
+        };
+        var system = window.matchMedia('(prefers-color-scheme: dark)');
+        var root = document.documentElement;
+        var button = document.getElementById('themeToggle');
+        var icon = document.getElementById('themeIcon');
+        var label = document.getElementById('themeLabel');
+        var current = 'auto';
+
+        function readMode() {
+          try {
+            var saved = localStorage.getItem(THEME_KEY);
+            if (MODES.indexOf(saved) >= 0) return saved;
+          } catch (error) {
+            /* storage may be blocked */
+          }
+          return 'auto';
+        }
+
+        function resolved(mode) {
+          if (mode === 'light' || mode === 'dark') return mode;
+          return system.matches ? 'dark' : 'light';
+        }
+
+        function apply(mode) {
+          var themeMode = MODES.indexOf(mode) >= 0 ? mode : 'auto';
+          var meta = META[themeMode];
+          var active = resolved(themeMode);
+          root.setAttribute('data-theme', active);
+          root.setAttribute('data-theme-mode', themeMode);
+          icon.textContent = meta.icon;
+          label.textContent = meta.label;
+          button.title = meta.title;
+          button.setAttribute(
+            'aria-label',
+            meta.title + '. Activate for ' + META[meta.next].label.toLowerCase() + ' theme.',
+          );
+          var themeColor = document.querySelector('meta[name="theme-color"]');
+          if (themeColor) themeColor.setAttribute('content', active === 'dark' ? '#17171a' : '#ffd93d');
+          return themeMode;
+        }
+
+        function setTheme(mode) {
+          current = apply(mode);
+          try {
+            localStorage.setItem(THEME_KEY, current);
+          } catch (error) {
+            /* storage may be blocked */
+          }
+        }
+
+        current = apply(readMode());
+
+        button.addEventListener('click', function () {
+          setTheme(META[current].next);
+        });
+
+        function onSystemChange() {
+          if (current === 'auto') apply('auto');
+        }
+
+        if (typeof system.addEventListener === 'function') {
+          system.addEventListener('change', onSystemChange);
+        } else if (typeof system.addListener === 'function') {
+          system.addListener(onSystemChange);
+        }
+      })();
+    </script>
+  </body>
+</html>
